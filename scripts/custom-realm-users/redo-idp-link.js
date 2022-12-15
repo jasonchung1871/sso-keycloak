@@ -79,7 +79,6 @@ async function main() {
         const { identityProvider, userId, userName } = links[0];
 
         if (userId === userName) {
-          console.log(`${userId} is equal to ${userName}`);
           continue;
         }
 
@@ -88,23 +87,25 @@ async function main() {
         }
 
         await adminClient.users.delFromFederatedIdentity({
-          kcRealm,
+          realm: kcRealm,
           id: baseUser.id,
           federatedIdentityId: identityProvider,
         });
 
         await adminClient.users.addToFederatedIdentity({
-          kcRealm,
+          realm: kcRealm,
           id: baseUser.id,
           federatedIdentityId: identityProvider,
           federatedIdentity: {
             userId: userName,
             userName: userName,
-            identityProvider, identityProvider,
+            identityProvider: identityProvider,
           },
         });
         userReport['updated'].push(baseUser.id);
       }
+
+      start = start + max;
     }
     console.log(userReport);
   } catch (ex) {
