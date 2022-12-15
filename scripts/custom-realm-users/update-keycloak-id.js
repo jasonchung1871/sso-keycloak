@@ -23,7 +23,7 @@ async function main() {
   ) {
     console.info(`
     Usage:
-      node add-guids --kc-env <env> --kc-realm <realm> [--totp <totp>]
+      node update-keycloak-ids --kc-env <env> --kc-realm <realm> [--totp <totp>]
 
     Flags:
       --kc-env             Base Keycloak environment. Available values: (dev, test, prod)
@@ -45,33 +45,34 @@ async function main() {
 
     console.log(`Connected to the database.`);
 
-    const silverKcAdminClient = await getKeycloakAdminClient('silver', kcEnv, kcRealm, { totp });
-    if (!silverKcAdminClient) return;
+    const goldKcAdminClient = await getKeycloakAdminClient('gold', kcEnv, kcRealm, { totp });
+    if (goldKcAdminClient) return;
 
     console.log(`Connected to keycloak`);
 
     userReport = {
-      'missing-guid': [],
+      'failed': [],
       'updated': [],
     };
 
-    const missingGuids = await client.query(`SELECT "keycloakId" from public.user WHERE "idpUserId" IS NULL OR "idpUserId"=''`);
+    const usersToUpdate = await client.query(`SELECT "idpUserId","idpCode" from public.user WHERE "idpUserId" IS NOT NULL`);
 
-    if (missingGuids.rowCount > 0) {
-      console.log(`There are ${missingGuids.rowCount} missing guids`);
-      for (let i = 0; i < missingGuids.rowCount; i++) {
-        const kcId = missingGuids.rows[i].keycloakId;
-        let targetUser = await silverKcAdminClient.users.findOne({
-          id: kcId,
-        });
-        if (targetUser) {
-          const guid = getGuid(targetUser);
-          if (guid === '') {
-            userReport['missing-guid'].push(targetUser);
-            continue;
-          }
-          await client.query('UPDATE public.user SET "idpUserId"=$1 WHERE "keycloakId"=$2', [guid, kcId]);
+    if (usersToUpdate.rowCount > 0) {
+      console.log(`There are ${usersToUpdate.rowCount} users`);
+      for (let i = 0; i < usersToUpdate.rowCount; i++) {
+        const idpUserId = usersToUpdate.rows[i].idpUserId;
+        const idpCode = usersToUpdate.rows[i].idpCode;
+        let searchParams = {};
+        searchParams[(idpCode == 'idir' ? 'idir_userid' : 'bceid_userid')] = idpUserId;
+        let targetUser = await goldKcAdminClient.users.findOne(searchParams);
+        console.log(searchParams);
+        console.log(targetUser.length);
+        if (targetUser && targetUser.length === 1) {
+          console.log(targetUser['id']);
+          await client.query('UPDATE public.user SET "keycloakId"=$1 WHERE "idpUserId"=$2', [targetUser['id'], idpUserId]);
           userReport['updated'].push(targetUser);
+        } else {
+          userReport['failed'].push(idpUserId);
         }
       }
     }
@@ -85,13 +86,3 @@ async function main() {
 }
 
 main();
-
-
-const getGuid = (targetUser) => {
-  if (!targetUser.attributes) return '';
-
-  if (targetUser.attributes.idir_userid) return targetUser.attributes.idir_userid[0];
-  if (targetUser.attributes.bceid_userid) return targetUser.attributes.bceid_userid[0];
-
-  return '';
-}

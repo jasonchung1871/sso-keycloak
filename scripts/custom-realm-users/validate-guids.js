@@ -34,18 +34,16 @@ async function main() {
   }
   try {
     pool = new Pool({
-      host: process.env.PGHOST,
-      port: process.env.PGPORT,
-      user: process.env.PGUSER,
-      password: (kcEnv === 'prod') ? process.env.PROD_PGPASSWORD :  (kcEnv === 'test' ? process.env.TEST_PGPASSWORD : process.env.PGPASSWORD),
-      database: process.env.PGDATABASE
+      host: process.env[`${kcEnv.toUpperCase()}_PGHOST`],
+      port: process.env[`${kcEnv.toUpperCase()}_PGPORT`],
+      user: process.env[`${kcEnv.toUpperCase()}_PGUSER`],
+      password: process.env[`${kcEnv.toUpperCase()}_PGPASSWORD`],
+      database: process.env[`${kcEnv.toUpperCase()}_PGDATABASE`]
     });
 
     client = await pool.connect();
 
     console.log(`Connected to the database.`);
-
-    // const res = await pool.query('SELECT NOW()');
 
     const silverKcAdminClient = await getKeycloakAdminClient('silver', kcEnv, kcRealm, { totp });
     if (!silverKcAdminClient) return;
